@@ -1,1 +1,11 @@
+define debug-kernel
 target remote localhost:26001
+end
+
+define turnon-disassemble
+set disassemble-next-line on
+end
+
+define turnoff-disassemble
+set disassemble-next-line off
+end
