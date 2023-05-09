@@ -1,4 +1,5 @@
 K=kernel
+KLIB=kernel/lib
 U=user
 
 OBJS = \
@@ -7,7 +8,7 @@ OBJS = \
   $K/string.o \
   $K/main.o \
   $K/vm.o \
-  $K/proc.o \
+  $K/thread.o \
   $K/swtch.o \
   $K/trampoline.o \
   $K/trap.o \
@@ -20,7 +21,8 @@ OBJS_KCSAN = \
   $K/console.o \
   $K/printf.o \
   $K/uart.o \
-  $K/spinlock.o
+  $K/spinlock.o\
+  $(KLIB)/list.o
 
 TOOLPREFIX = riscv64-unknown-elf-
 
@@ -82,11 +84,8 @@ GDBPORT = $(shell expr `id -u` % 5000 + 25000)
 QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
 	then echo "-gdb tcp::$(GDBPORT)"; \
 	else echo "-s -p $(GDBPORT)"; fi)
-ifndef CPUS
-CPUS := 3
-endif
 
-QEMUOPTS = -machine virt -bios bootloader/sbi -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
+QEMUOPTS = -machine virt -bios bootloader/sbi -kernel $K/kernel -m 128M -smp 2 -nographic
 QEMUOPTS += -global virtio-mmio.force-legacy=false
 
 qemu: all
@@ -103,7 +102,7 @@ debug:
 
 clean: 
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*/*.o */*.d */*.asm */*.sym \
+	*/*.o */*.d */*.asm */*.sym */*/*.o */*/*.d \
 	$U/initcode $U/initcode.out $K/kernel fs.img \
 	mkfs/mkfs \
 	$(UPROGS) \

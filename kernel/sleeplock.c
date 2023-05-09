@@ -6,7 +6,6 @@
 #include "param.h"
 #include "memlayout.h"
 #include "spinlock.h"
-#include "proc.h"
 #include "sleeplock.h"
 
 void
@@ -23,10 +22,10 @@ acquiresleep(struct sleeplock *lk)
 {
   acquire(&lk->lk);
   while (lk->locked) {
-    sleep(lk, &lk->lk);
+    // sleep(lk, &lk->lk);
   }
   lk->locked = 1;
-  lk->pid = myproc()->pid;
+  // lk->pid = myproc()->pid;
   release(&lk->lk);
 }
 
@@ -36,17 +35,17 @@ releasesleep(struct sleeplock *lk)
   acquire(&lk->lk);
   lk->locked = 0;
   lk->pid = 0;
-  wakeup(lk);
+  // wakeup(lk);
   release(&lk->lk);
 }
 
 int
 holdingsleep(struct sleeplock *lk)
 {
-  int r;
+  int r = 0;
   
   acquire(&lk->lk);
-  r = lk->locked && (lk->pid == myproc()->pid);
+  // r = lk->locked && (lk->pid == myproc()->pid);
   release(&lk->lk);
   return r;
 }

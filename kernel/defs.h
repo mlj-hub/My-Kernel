@@ -1,5 +1,10 @@
+#ifndef _DEFS_H_
+#define _DEFS_H_
+
+#include "types.h"
+#include "riscv.h"
+
 struct context;
-struct proc;
 struct spinlock;
 struct sleeplock;
 struct stat;
@@ -22,17 +27,6 @@ void            printf(char*, ...);
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 
-// proc.c
-int             cpuid(void);
-void            proc_mapstacks(pagetable_t);
-struct cpu*     mycpu(void);
-struct proc*    myproc();
-void            procinit(void);
-void            scheduler(void) __attribute__((noreturn));
-void            sched(void);
-void            sleep(void*, struct spinlock*);
-void            wakeup(void*);
-void            yield(void);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -92,3 +86,5 @@ void            plic_complete(int);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+#endif

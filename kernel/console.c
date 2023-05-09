@@ -18,7 +18,6 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "defs.h"
-#include "proc.h"
 
 #define BACKSPACE 0x100
 #define C(x)  ((x)-'@')  // Control-x

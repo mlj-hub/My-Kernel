@@ -5,7 +5,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "riscv.h"
-#include "proc.h"
+#include "thread.h"
 #include "defs.h"
 
 void

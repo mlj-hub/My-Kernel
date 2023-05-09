@@ -3,6 +3,7 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "defs.h"
+#include "thread.h"
 
 volatile static int started = 0;
 
@@ -19,11 +20,12 @@ main()
     kinit();         // physical page allocator
     kvminit();       // create kernel page table
     kvminithart();   // turn on paging
-    procinit();      // process table
     trapinit();      // trap vectors
     trapinithart();  // install kernel trap vector
     plicinit();      // set up interrupt controller
     plicinithart();  // ask PLIC for device interrupts
+    thread_init();
+    thread_idle_init();
     __sync_synchronize();
     started = 1;
   } else {
@@ -36,5 +38,6 @@ main()
     plicinithart();   // ask PLIC for device interrupts
   }
 
-  scheduler();        
+  intr_on();
+  for(;;);
 }
