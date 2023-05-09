@@ -1,3 +1,6 @@
+#ifndef _PROC_H_
+#define _PROC_H_
+
 // Saved registers for kernel context switches.
 struct context {
   uint64 ra;
@@ -103,3 +106,5 @@ struct proc {
   struct context context;      // swtch() here to run process
   char name[16];               // Process name (debugging)
 };
+
+#endif

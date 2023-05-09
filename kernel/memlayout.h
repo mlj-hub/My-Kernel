@@ -1,3 +1,6 @@
+#ifndef _MEMLAYOUT_H_
+#define _MEMLAYOUT_H_
+
 // Physical memory layout
 
 // qemu -machine virt is set up like this,
@@ -65,3 +68,5 @@
 //   TRAPFRAME (p->trapframe, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
+
+#endif
