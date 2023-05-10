@@ -120,7 +120,8 @@ void thread_idle_init();
 tid_t thread_create(char * name, int priority,thread_func* function,void * arg);
 void thread_exit();
 void thread_yield();
+struct thread * thread_current();
 struct cpu * mycpu();
 int cpuid();
-// void proc_mapstacks(pagetable_t kpgtbl);
+void thread_start();
 #endif

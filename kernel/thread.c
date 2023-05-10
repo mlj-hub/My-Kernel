@@ -16,7 +16,8 @@ static struct spinlock ready_list_lock;
 
 struct cpu cpus[8];
 
-struct thread * idle = NULL;
+struct thread * hart0_idle = NULL;
+struct thread * hart1_idle = NULL;
 
 static struct thread * thread_get_ready();
 static void kernel_thread();
@@ -34,12 +35,17 @@ thread_init(){
 
 void
 idle_thread(void * _){
+    if(cpuid()==0)
+        hart0_idle = thread_current();
+    else
+        hart1_idle = thread_current();
+    intr_on();
     for(;;);
 }
 
 void 
 thread_idle_init(){
-    if(r_tp()==0)
+    if(cpuid()==0)
         thread_create("hart0_idle",0,idle_thread,NULL);
     else
         thread_create("hart1_idle",0,idle_thread,NULL);
@@ -64,9 +70,6 @@ thread_create(char * name, int priority,thread_func* function,void * arg){
     t->kernel_stack = (uint8_t *)t+PGSIZE;
     t->kernel_thread_frame.function = function;
     t->kernel_thread_frame.arg = arg; 
-    
-    if(!idle)
-        idle = t;
     
     list_push_back(&all_list,&t->all_elem);
     list_push_back(&ready_list,&t->elem);
@@ -96,7 +99,7 @@ thread_get_ready(){
     acquire(&ready_list_lock);
     if(list_empty(&ready_list)){
         release(&ready_list_lock);
-        return idle;
+        return cpuid()==0?hart0_idle:hart1_idle;
     }
     struct thread * t = list_entry(list_pop_front(&ready_list),struct thread, elem);
     release(&ready_list_lock);
@@ -132,16 +135,10 @@ thread_current(){
     return mycpu()->cur_thread;
 }
 
-// void
-// proc_mapstacks(pagetable_t kpgtbl)
-// {
-//   struct proc *p;
-  
-//   for(p = proc; p < &proc[NPROC]; p++) {
-//     char *pa = kalloc();
-//     if(pa == 0)
-//       panic("kalloc");
-//     uint64 va = KSTACK((int) (p - proc));
-//     kvmmap(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-//   }
-// }
+void
+thread_start(){
+    struct context temp_comtext;
+    struct thread * next_thread = thread_get_ready();
+    mycpu()->cur_thread = next_thread;
+    swtch(&temp_comtext,&next_thread->context);
+}

@@ -33,11 +33,12 @@ main()
       ;
     __sync_synchronize();
     printf("hart %d starting\n", cpuid());
+    thread_idle_init();
     kvminithart();    // turn on paging
     trapinithart();   // install kernel trap vector
     plicinithart();   // ask PLIC for device interrupts
   }
 
-  intr_on();
-  for(;;);
+  thread_start();
+  NOT_REACHED();
 }
