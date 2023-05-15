@@ -117,7 +117,7 @@ struct thread {
 
 void thread_init();
 void thread_idle_init();
-tid_t thread_create(char * name, int priority,thread_func* function,void * arg);
+struct thread * thread_create(char * name, int priority,thread_func* function,void * arg);
 void thread_exit();
 void thread_yield();
 struct thread * thread_current();
