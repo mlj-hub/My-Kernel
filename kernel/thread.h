@@ -110,6 +110,8 @@ struct thread {
   enum thread_status status;
   struct spinlock lock;
   uint8_t * kernel_stack;
+  int sleep_clock;
+  struct list_elem sleep_elem;
   struct context context;
   struct kernel_thread_frame kernel_thread_frame;
 };
@@ -124,4 +126,9 @@ struct thread * thread_current();
 struct cpu * mycpu();
 int cpuid();
 void thread_start();
+void thread_unblock(struct thread *);
+void thread_block();
+
+extern struct list sleep_list;
+extern struct spinlock sleep_list_lock;
 #endif

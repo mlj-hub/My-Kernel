@@ -282,6 +282,12 @@ intr_off()
   w_sstatus(r_sstatus() & ~SSTATUS_SIE);
 }
 
+static inline void
+intr_set(int level)
+{
+  level == 1 ? intr_on() : intr_off();
+}
+
 // are device interrupts enabled?
 static inline int
 intr_get()

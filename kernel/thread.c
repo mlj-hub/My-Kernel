@@ -11,10 +11,11 @@ struct spinlock tid_lock;
 static struct list all_list;
 static struct spinlock all_list_lock;
 
-static struct list hart0_ready_list;
-static struct list hart1_ready_list;
-static struct spinlock hart0_ready_list_lock;
-static struct spinlock hart1_ready_list_lock;
+static struct list ready_list;
+static struct spinlock ready_list_lock;
+
+struct list sleep_list;
+struct spinlock sleep_list_lock;
 
 struct cpu cpus[8];
 
@@ -24,18 +25,28 @@ struct thread * hart1_idle = NULL;
 static struct thread * thread_get_ready();
 static void kernel_thread();
 struct cpu * mycpu();
-void dump_list(struct list * target_list);
+void dump_list();
 
 
 void
 thread_init(){
     list_init(&all_list); 
-    list_init(&hart0_ready_list);
-    list_init(&hart1_ready_list);
+    list_init(&ready_list);
+    list_init(&sleep_list);
     initlock(&tid_lock,"tid lock");
     initlock(&all_list_lock,"all list lock");
-    initlock(&hart0_ready_list_lock,"hart0 ready list lock");
-    initlock(&hart1_ready_list_lock,"hart1 ready list lock");
+    initlock(&ready_list_lock,"ready list lock");
+    initlock(&sleep_list_lock,"sleep list lock");
+}
+
+void thread_sleep(int sleep_tick){
+    if(sleep_tick <=0)
+        return;
+    thread_current()->sleep_clock = sleep_tick;
+    acquire(&sleep_list_lock);
+    list_push_back(&sleep_list,&thread_current()->sleep_elem);
+    release(&sleep_list_lock);
+    thread_block();
 }
 
 void
@@ -44,7 +55,10 @@ idle_thread(void * _){
 }
 
 void thread_test(void * _){
+    extern uint ticks;
     printf("name: %s, tid:%d, cpuid:%d\n",thread_current()->name,thread_current()->tid,cpuid());
+    thread_sleep(thread_current()->tid+1);
+    printf("%s wake up after %d ticks, current ticks:%d, cpuid:%d\n",thread_current()->name,thread_current()->tid+1,ticks,cpuid());
     for(;;);
 }
 
@@ -70,7 +84,7 @@ thread_create(char * name, int priority,thread_func* function,void * arg){
     release(&tid_lock);
 
     struct thread * t =(struct thread *) kalloc(); 
-    printf("thread:%s, start address:0x%p\n",name,(void *)t);
+    // printf("thread:%s, start address:0x%p\n",name,(void *)t);
 
     if(!t)
         return NULL;
@@ -86,11 +100,13 @@ thread_create(char * name, int priority,thread_func* function,void * arg){
     t->kernel_thread_frame.function = function;
     t->kernel_thread_frame.arg = arg; 
     
+    acquire(&all_list_lock);
     list_push_back(&all_list,&t->all_elem);
-    if(ret_tid%2 == 0)
-        list_push_back(&hart0_ready_list,&t->elem);
-    if(ret_tid%2 == 1)
-        list_push_back(&hart1_ready_list,&t->elem);
+    release(&all_list_lock);
+
+    acquire(&ready_list_lock);
+    list_push_back(&ready_list,&t->elem);
+    release(&ready_list_lock);
 
     return t;
 }
@@ -99,9 +115,11 @@ void
 thread_exit(){
     struct thread * cur_thread = mycpu()->cur_thread;
     cur_thread->status = DYING;
+    intr_off();
     acquire(&all_list_lock);
     list_remove(&cur_thread->all_elem);
     release(&all_list_lock);
+    
     thread_yield();
 }
 
@@ -115,36 +133,74 @@ kernel_thread(){
 
 static struct thread *
 thread_get_ready(){
-    struct list * ready_list = NULL;
-    if(cpuid() == 0){
-        acquire(&hart0_ready_list_lock);
-        ready_list = &hart0_ready_list;
-    }
-    else{
-        acquire(&hart1_ready_list_lock);
-        ready_list = &hart1_ready_list;
-    }
-
-
-    if(list_empty(ready_list)){
-        release(cpuid()==0?&hart0_ready_list_lock:&hart1_ready_list_lock);
+    acquire(&ready_list_lock);
+    if(list_empty(&ready_list)){
+        release(&ready_list_lock);
         return cpuid()==0?hart0_idle:hart1_idle;
     }
-    struct thread * t = list_entry(list_pop_front(ready_list),struct thread, elem);
-    release(cpuid()==0?&hart0_ready_list_lock:&hart1_ready_list_lock);
+    struct thread * t = list_entry(list_pop_front(&ready_list),struct thread, elem);
+    t->status = RUNNING;
+    release(&ready_list_lock);
     return t;
 }
 
+/*This function should be called when interrupt is disabled*/
 void
 thread_yield(){
+    ASSERT(intr_get() == 0);
     struct thread * next_thread  = thread_get_ready();
     struct thread * cur_thread  = mycpu()->cur_thread;
+    struct thread * prev_thread = NULL;
     
     if(next_thread != cur_thread){
+        ASSERT(next_thread->status == RUNNING);
         mycpu()->cur_thread = next_thread;
-        list_push_back(cpuid()==0?&hart0_ready_list:&hart1_ready_list,&cur_thread->elem);
-        swtch(&cur_thread->context,&next_thread->context);
+
+        acquire(&ready_list_lock);
+        if(cur_thread->status == RUNNING){
+            cur_thread->status = READY;
+            list_push_back(&ready_list,&cur_thread->elem);
+        }
+        release(&ready_list_lock);
+        
+        prev_thread = swtch(&cur_thread->context,&next_thread->context);
+        if(prev_thread==NULL)
+            for(;;);
+        // swtch(&cur_thread->context,&next_thread->context);
     }
+    
+    // ASSERT(prev_thread !=NULL);
+    
+    if(prev_thread->status == DYING){
+        printf("thread %s exit\n",prev_thread->name);
+        kfree(prev_thread);
+    }
+}
+
+/*This fucntion will disable the interrupt and block current thread. After the thread is putting back, 
+  it will restore the interrupt state.*/
+void thread_block(void){
+    int old_level = intr_get();
+    intr_off();
+
+    thread_current()->status = BLOCKED;
+    thread_yield();
+    
+    intr_set(old_level);
+}
+
+/*This function will put the thread into ready state. This function is atomic*/
+void thread_unblock(struct thread * t){
+    ASSERT(t->status == BLOCKED);
+    int old_level = intr_get();
+    intr_off();
+
+    acquire(&ready_list_lock);
+    t->status = READY;
+    list_push_back(&ready_list,&t->elem);
+    release(&ready_list_lock);
+    
+    intr_set(old_level);
 }
 
 struct cpu *
@@ -173,8 +229,32 @@ thread_start(){
     swtch(&temp_comtext,&next_thread->context);
 }
 
-void dump_list(struct list * target_list){
-    for(struct list_elem *i=list_front(target_list);i!=list_end(target_list);i=list_next(i)){
+void dump_list(){
+    int cnt=0;
+    printf("\n==========ready list==============\n");
+    for(struct list_elem *i=list_begin(&ready_list);i!=list_end(&ready_list);i=list_next(i)){
         printf("name :%s\n",list_entry(i,struct thread,elem)->name);
+        cnt++;
     }
+    printf("ready thread number:%d\n",cnt);
+    cnt = 0;
+    printf("\n==========all list==============\n");
+    for(struct list_elem *i=list_begin(&all_list);i!=list_end(&all_list);i=list_next(i)){
+        printf("name :%s\n",list_entry(i,struct thread,all_elem)->name);
+        cnt++;
+    }
+    printf("all thread number:%d\n",cnt);
+
+    cnt=0;
+    printf("\n==========sleep list==============\n");
+    for(struct list_elem *i=list_begin(&sleep_list);i!=list_end(&sleep_list);i=list_next(i)){
+        printf("name :%s\n",list_entry(i,struct thread,sleep_elem)->name);
+        cnt++;
+    }
+    printf("sleep thread number:%d\n",cnt);
+
+    printf("\nhart0 current thread: %s\n",cpus[0].cur_thread->name);
+    printf("hart1 current thread: %s\n",cpus[1].cur_thread->name);
+
+
 }

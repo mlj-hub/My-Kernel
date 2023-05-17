@@ -145,8 +145,19 @@ kerneltrap()
   }
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2 )
+  if(which_dev == 2 ){
+    acquire(&sleep_list_lock);
+    for(struct list_elem * i= list_begin(&sleep_list);i!=list_end(&sleep_list);i = list_next(i)){
+      struct thread * t = list_entry(i,struct thread,sleep_elem);
+      t->sleep_clock--;
+      if(t->sleep_clock==0){
+        list_remove(i);
+        thread_unblock(t);
+      }
+    }
+    release(&sleep_list_lock);
     thread_yield();
+  }
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.

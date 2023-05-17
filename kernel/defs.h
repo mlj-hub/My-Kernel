@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include "riscv.h"
+#include "thread.h"
 
 struct context;
 struct spinlock;
@@ -29,7 +30,7 @@ void            printfinit(void);
 
 
 // swtch.S
-void            swtch(struct context*, struct context*);
+struct thread * swtch(struct context*, struct context*);
 
 // spinlock.c
 void            acquire(struct spinlock*);
